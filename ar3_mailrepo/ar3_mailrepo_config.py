@@ -4,24 +4,32 @@
 # Copyright Arthur Rabatin. See www.rabatin.com
 # ---------------------------------------------
 
-import yaml
+"""
+Configuration manager for MailRepo
+"""
+
 from pathlib import Path
 
+import yaml
+
+
 class AppConfig:
+  """
+  Configuration object for the application, such as data paths and db connection details
+  Does not / should not contain passwords
+  """
 
   @staticmethod
-  def from_configfile(config_file, verify_paths=True):
+  def from_configfile(config_file):
     config_obj = AppConfig()
     with open(config_file) as config_fp:
       config_obj.data = yaml.safe_load(config_fp)
     return config_obj
 
   @staticmethod
-  def from_dict(config_data:dict, verify_paths=True):
+  def from_dict(config_data: dict):
     config_obj = AppConfig()
     config_obj.data = config_data
-    if verify_paths:
-      config_obj._verify_paths()
     return config_obj
 
   def __init__(self):

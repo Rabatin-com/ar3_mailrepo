@@ -1,7 +1,11 @@
 #!/usr/bin/env python
+
 """
-Hello World, but with more meat.
+Experimental GUI Application for MailRepo
 """
+
+# Because of the wx library features, such es event IDs, there are a number of unused args
+# pylint: disable=unused-argument
 
 import platform
 from pathlib import Path
@@ -40,6 +44,9 @@ def populate_grid_with_dict_list(gridobj, dictlist):
 
 
 class EmailFolderListingTab(wx.Panel):
+  """
+  A Window tab that allows a user to retrieve email folders per email address
+  """
 
   @staticmethod
   def add_as_page(parent, credentials_root: Path):
@@ -47,9 +54,9 @@ class EmailFolderListingTab(wx.Panel):
     parent.AddPage(tab, tab.descr)
 
   def on_list_folders_button(self, event):
-    # wx.MessageBox(self.emails.GetValue())
-    folderData = ar3_mailrepo_lib.get_folders_for_email(self.credentials_root, self.emails.GetValue())
-    populate_grid_with_dict_list(self.grid, folderData)
+    folder_data = ar3_mailrepo_lib.get_folders_for_email(self.credentials_root,
+                                                         self.emails.GetValue())
+    populate_grid_with_dict_list(self.grid, folder_data)
 
   def __init__(self, parent, credentials_root: Path):
     wx.Panel.__init__(self, parent)
@@ -84,6 +91,10 @@ class EmailFolderListingTab(wx.Panel):
 
 class EmailListing(wx.Panel):
 
+  """
+  A window tab that lists information for each email account
+  """
+
   @staticmethod
   def add_as_page(parent, credentials_root: Path):
     tab = EmailListing(parent, credentials_root)
@@ -117,8 +128,9 @@ class EmailListing(wx.Panel):
 
 
 class MainAppFrame(wx.Frame):
+
   """
-  A Frame that says Hello World
+  The main app frame for the MailRepo GUI app
   """
 
   def _create_emaillist_combobx(self, parent):
@@ -147,26 +159,25 @@ class MainAppFrame(wx.Frame):
     sizer.Add(tabcontainer, 1, wx.EXPAND)
     pnl.SetSizer(sizer)
 
-    self.makeMenuBar()
+    self.make_menu_bar()
 
     self.CreateStatusBar()
     self.SetStatusText(ar3_mailrepo_version_info.into_string())
 
-  def makeMenuBar(self):
-    fileMenu = wx.Menu()
-    testItem = fileMenu.Append(-1, "&Test...\tCtrl-T",
-                                "Test Menu Item")
-    fileMenu.AppendSeparator()
-    exitItem = fileMenu.Append(wx.ID_EXIT)
-    helpMenu = wx.Menu()
-    aboutItem = helpMenu.Append(wx.ID_ABOUT)
-    menuBar = wx.MenuBar()
-    menuBar.Append(fileMenu, "&File")
-    menuBar.Append(helpMenu, "&Help")
-    self.SetMenuBar(menuBar)
-    self.Bind(wx.EVT_MENU, self.OnTestItem, testItem)
-    self.Bind(wx.EVT_MENU, self.OnExit, exitItem)
-    self.Bind(wx.EVT_MENU, self.OnAbout, aboutItem)
+  def make_menu_bar(self):
+    file_menu = wx.Menu()
+    test_item = file_menu.Append(-1, '&Test...\tCtrl-T', 'Test Menu Item')
+    file_menu.AppendSeparator()
+    exit_item = file_menu.Append(wx.ID_EXIT)
+    help_menu = wx.Menu()
+    about_item = help_menu.Append(wx.ID_ABOUT)
+    menu_bar = wx.MenuBar()
+    menu_bar.Append(file_menu, '&File')
+    menu_bar.Append(help_menu, '&Help')
+    self.SetMenuBar(menu_bar)
+    self.Bind(wx.EVT_MENU, self.OnTestItem, test_item)
+    self.Bind(wx.EVT_MENU, self.OnExit, exit_item)
+    self.Bind(wx.EVT_MENU, self.OnAbout, about_item)
 
   def OnExit(self, event):
     self.Close(True)

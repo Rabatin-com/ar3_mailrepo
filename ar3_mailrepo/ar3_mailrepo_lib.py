@@ -4,6 +4,11 @@
 # Copyright Arthur Rabatin. See www.rabatin.com
 # ---------------------------------------------
 
+"""
+Main functions to manage email account connections and retrieval
+"""
+# pylint: disable=inconsistent-quotes
+
 import base64
 import datetime
 import imaplib
@@ -33,6 +38,10 @@ def create_server_connection(credentials: dict):
 
 
 class ServerConnection:
+
+  """
+  Base class representing email server connection
+  """
 
   def __init__(self):
     pass
@@ -106,6 +115,11 @@ class ServerConnection:
 
 
 class GmailServerConnection(ServerConnection):
+
+  """
+  GMAIL Specific email server connection class
+  """
+
   SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
 
   @staticmethod
@@ -130,7 +144,7 @@ class GmailServerConnection(ServerConnection):
     return build('gmail', 'v1', credentials=creds)
 
   def __init__(self, credentials: dict):
-    super()
+    super(GmailServerConnection, self).__init__()
     self.credentials = credentials
     self.conn = GmailServerConnection._build_gmail_service(credentials)
 
@@ -165,7 +179,7 @@ class GmailServerConnection(ServerConnection):
       if results['resultSizeEstimate'] > 0:
         resultlist.extend(results['messages'])
     message_ids = {x['id'] for x in resultlist}
-    ERROR_LIMT = 1000
+    error_limt = 1000
     error_count = 0
     for msg_ix, message_id in enumerate(message_ids):
       try:
@@ -183,9 +197,9 @@ class GmailServerConnection(ServerConnection):
           }
         else:
           yield self.standardise_message(message)
-      except Exception as e:
+      except Exception as e: # pylint: disable=broad-except
         error_count += 1
-        if error_count > ERROR_LIMT:
+        if error_count > error_limt:
           raise RuntimeError(
             f'Exceeding number of messages errors {error_count} in gmail download')
         logger.debug(f'Yielding error object {str(e)}')
@@ -223,6 +237,11 @@ class GmailServerConnection(ServerConnection):
 
 
 class IMAPServerConnection(ServerConnection):
+
+  """
+  IMAP Specific server connection
+  """
+
   LIST_RESPONSE_PATTERN = re.compile(
     r'\((?P<flags>.*?)\) "(?P<delimiter>.*)" (?P<name>.*)'
   )
@@ -239,8 +258,8 @@ class IMAPServerConnection(ServerConnection):
 
   @staticmethod
   def create_imap_connection(credentials: dict):
-    logger.debug('Logging into IMAP Server %s @ %s'
-                 % (credentials['imap_user'], credentials['imap_host']))
+    logger.debug(f"Logging into IMAP Server {credentials['imap_user']} "
+                 f"@ {credentials['imap_host']}")
     if credentials['imap_starttls']:
       ctx = ssl.SSLContext(protocol=ssl.PROTOCOL_TLSv1)
       imap_conn = imaplib.IMAP4(host=credentials['imap_host'],
@@ -256,11 +275,11 @@ class IMAPServerConnection(ServerConnection):
     try:
       if self.conn:
         self.conn.logout()
-    except Exception:
+    except Exception: # pylint: disable=broad-except
       logger.exception('Error during closing of connection')
 
   def __init__(self, credentials: dict):
-    super()
+    super(IMAPServerConnection, self).__init__()
     self.credentials = credentials
     self.conn = IMAPServerConnection.create_imap_connection(credentials=credentials)
 
@@ -271,7 +290,7 @@ class IMAPServerConnection(ServerConnection):
     if return_status == 'OK':
       for folder_rec in binary_code_folders:
         folders.append({
-          'name':IMAPServerConnection._strip_folder_name(folder_rec.decode('utf-8'))
+          'name': IMAPServerConnection._strip_folder_name(folder_rec.decode('utf-8'))
         })
     else:
       raise RuntimeError(f'Downloading IMAP4 folder list. Status: {str(return_status)}.'
@@ -279,13 +298,13 @@ class IMAPServerConnection(ServerConnection):
     return folders
 
   def retrieve_messages(self, since_date: datetime.datetime, dupes_filterset: set):
-    ERROR_LIMT = 1000
+    max_error_limit = 1000
     account = self.credentials['imap_user'] + '@' + self.credentials['imap_host']
     logger.debug(f'Retrieve IMAP messages for {account}')
     folders = self.retrieve_folders()
     msg_error_count = 0
     for folderix, folder_rec in enumerate(folders):
-      folder=folder_rec['name']
+      folder = folder_rec['name']
       logger.debug(
         f'Processing folder {folder} ({folderix + 1}/{len(folders)}) for {account}')
       try:
@@ -302,7 +321,7 @@ class IMAPServerConnection(ServerConnection):
             'error_description': f'Error in Folder {folder}: {folder_error_descr}',
             'error_scope': 'FOLDER'
           }
-      except Exception as e:
+      except Exception as e: # pylint: disable=broad-except
         yield {
           'is_error': 'True',
           'error_description': f'Error in Folder {folder}: {str(e)}',
@@ -326,14 +345,14 @@ class IMAPServerConnection(ServerConnection):
               'error_description': error_descr,
               'error_scope': 'MESSAGE'
             }
-            if msg_error_count > ERROR_LIMT:
+            if msg_error_count > max_error_limit:
               raise RuntimeError(
                 f'Exceeding number of messages errors {msg_error_count} in {account}')
           if msg_return_status == 'OK':
             message_obj = mailparser.parse_from_bytes(msg_data[0][1])
-            id = str(message_obj.message_id)
-            if id in dupes_filterset:
-              logger.debug(f'Message dupe found based on filterset and ignored: >>{id}<<')
+            msg_id = str(message_obj.message_id)
+            if msg_id in dupes_filterset:
+              logger.debug(f'Message dupe found and ignored: {msg_id}')
               yield {
                 'is_dupe': 'True',
               }

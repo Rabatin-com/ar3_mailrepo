@@ -7,23 +7,20 @@
 """
 Utility functions to operate mail repo
 """
-import datetime
-import json
-from pathlib import Path
 import collections
-
-import sqlalchemy
+import json
 import uuid
-import storage
+from pathlib import Path
 
-PICKLE_PROTOCOL =4
+PICKLE_PROTOCOL = 4
+
 
 def create_unique_id():
   return str(uuid.uuid4())
 
 
 def retrieve_all_email_labels(credential_root_path: Path):
-  emails=[]
+  emails = []
   if not credential_root_path.exists():
     raise RuntimeError(f'Does not exist: {credential_root_path}')
   for child in credential_root_path.iterdir():
@@ -31,16 +28,14 @@ def retrieve_all_email_labels(credential_root_path: Path):
       if Path(Path(child) / 'credentials.json').exists():
         emails.append(child.name)
 
-
-
   return emails
 
 
 def load_generic_credentials(credential_root_path: Path, email_label: str):
   auth_data_path = credential_root_path / Path(email_label)
   with open(Path(auth_data_path / Path('credentials.json'))) as f:
-    creds =  json.load(f)
-  creds['emaillabel']=email_label
+    creds = json.load(f)
+  creds['emaillabel'] = email_label
   if creds['protocol'] == 'imap4':
     if 'imap_port' not in creds:
       creds['imap_port'] = 993
@@ -54,25 +49,26 @@ def load_generic_credentials(credential_root_path: Path, email_label: str):
     raise RuntimeError(f"Unkown Protocol {creds['protocol']}")
   return creds
 
+
 def list_all_available_cache_data(datacache_root_path: Path):
   cache_data = collections.defaultdict(list)
   for emailfolder in datacache_root_path.glob('*'):
     if '@' in str(emailfolder) and emailfolder.is_dir():
-      cache_data[emailfolder.name] = [x for x in list_avilable_cache_data_for_email(datacache_root_path, emailfolder.name)]
+      cache_data[emailfolder.name] = [x for x in list_avilable_cache_data_for_email( #pylint: disable=unnecessary-comprehension
+        datacache_root_path, emailfolder.name)]
   return cache_data
 
 
-def list_avilable_cache_data_for_email(datacache_root_path: Path, emaillabel:str):
-  for datafolder in Path(datacache_root_path/emaillabel).glob('*'):
+def list_avilable_cache_data_for_email(datacache_root_path: Path, emaillabel: str):
+  for datafolder in Path(datacache_root_path / emaillabel).glob('*'):
     yield datafolder.name
 
 
-
-def safe_create_path(create_root_path:Path, new_stem:Path):
-    cnt = 0
-    test_stem = new_stem
-    while (Path(create_root_path/test_stem)).exists():
-        cnt +=1
-        test_stem = Path(f'{new_stem}({cnt})')
-    Path(create_root_path/test_stem).mkdir(parents=True)
-    return Path(create_root_path/test_stem)
+def safe_create_path(create_root_path: Path, new_stem: Path):
+  cnt = 0
+  test_stem = new_stem
+  while (Path(create_root_path / test_stem)).exists():
+    cnt += 1
+    test_stem = Path(f'{new_stem}({cnt})')
+  Path(create_root_path / test_stem).mkdir(parents=True)
+  return Path(create_root_path / test_stem)

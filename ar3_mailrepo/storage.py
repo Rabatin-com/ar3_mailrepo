@@ -1,16 +1,28 @@
+#!/usr/bin/env python3
+
+# ---------------------------------------------
+# Copyright Arthur Rabatin. See www.rabatin.com
+# ---------------------------------------------
+
+"""
+Database and other storage funcionality
+"""
+
+from sqlalchemy import Table, Column, LargeBinary, Integer, String, Text, DateTime, \
+  MetaData
+from sqlalchemy import create_engine, inspect, select
+
 import datetime
 import json
 import logging
 import pickle
 from pathlib import Path
-import ar3_mailrepo_version_info
+
+import ar3_mailrepo_config
+import ar3_mailrepo_version_info as versioninfo
 
 logger = logging.getLogger('ar3_mailrepo.storage')
 
-from sqlalchemy import Table, Column, LargeBinary, Integer, String,Text, DateTime, MetaData
-from sqlalchemy import create_engine, inspect, select
-
-import ar3_mailrepo_config
 
 
 def create_new_timestamped_cache_path(email_cache_folder: Path):
@@ -43,32 +55,36 @@ def create_download_report(len_messages_listed: int,
   logger.debug(f'Created download report {output_filename}')
 
 
-def load_pickle_object_as_data(picklefilename:Path):
+def load_pickle_object_as_data(picklefilename: Path):
   with open(picklefilename, 'rb') as f:
     load_msg = pickle.load(f)
 
     msg = {}
-    for k,v in load_msg.items():
+    for k, v in load_msg.items():
       if v and isinstance(v, str):
-          msg[k] = v.replace('\x00', '')
+        msg[k] = v.replace('\x00', '')
       else:
         msg[k] = v
 
     return {
-        'msg_uuid': msg['ar3mr_uuid'],
-        'email_account': msg['ar3mr_email_account'],
-        'msg_id': msg['ar3mr_id'],
-        'msg_ts': msg['ar3mr_ts'],
-        'msg_subj': msg['ar3mr_subj'],
-        'msg_from': msg['ar3mr_from'],
-        'msg_to': msg['ar3mr_to'],
-        'source': msg['ar3mr_source'],
-        'dnload_ts': msg['ar3mr_downloadtime'],
-        'raw_data': msg['ar3mr_raw'],
-        'gmail_data': msg['ar3mr_gmail_data']
-      }
+      'msg_uuid': msg['ar3mr_uuid'],
+      'email_account': msg['ar3mr_email_account'],
+      'msg_id': msg['ar3mr_id'],
+      'msg_ts': msg['ar3mr_ts'],
+      'msg_subj': msg['ar3mr_subj'],
+      'msg_from': msg['ar3mr_from'],
+      'msg_to': msg['ar3mr_to'],
+      'source': msg['ar3mr_source'],
+      'dnload_ts': msg['ar3mr_downloadtime'],
+      'raw_data': msg['ar3mr_raw'],
+      'gmail_data': msg['ar3mr_gmail_data']
+    }
+
 
 class DataCacheFolder:
+  """
+  Manages message cache folders
+  """
 
   def __init__(self, foldername: Path):
     self.name = Path(foldername)
@@ -86,32 +102,34 @@ class DataCacheFolder:
   def message_data_files(self):
     return len(self.name.glob('*.pickle'))
 
-  def store_messages_in_database(self,dbconn):
-    batchsize=2000
+  def store_messages_in_database(self, dbconn):
+    batchsize = 2000
 
-    store_list=[]
-    message_files = [x for x in self.name.glob('*.pickle')]
+    store_list = []
+    message_files = [x for x in self.name.glob('*.pickle')] # pylint: disable=unnecessary-comprehension
     for ix, filename in enumerate(message_files):
       logger.debug(f'Loading file {ix + 1}/{len(message_files)}: {filename}')
       store_list.append(load_pickle_object_as_data(filename))
       # logger.debug(f"{msg['ar3mr_ts']} in " )
       if ((ix + 1) % batchsize == 0) or (ix + 1 == len(message_files)):
         logger.debug(f'Reached limit to insert in DB: {len(store_list)}')
-        msg_ins = messagedata.insert()
+        msg_ins = messagedata.insert(None)
         dbconn.execute(msg_ins, store_list)
         store_list.clear()
-        logger.debug(f'Insert done')
-    if len([x for x in self.name.glob('*.pickle')]) != len(message_files):
+        logger.debug('Insert done')
+    if len([x for x in self.name.glob('*.pickle')]) != len(message_files): # pylint: disable=unnecessary-comprehension
       raise Exception(f'Directory {self.name} has been modified since DB insert started')
     return len(message_files)
 
 
-def msg_uuid_per_account(dbconn,email_account):
-  smt = select([messagedata.c.msg_uuid]).where(messagedata.c.email_account == email_account)
+def msg_uuid_per_account(dbconn, email_account):
+  smt = select([messagedata.c.msg_uuid]).where(
+    messagedata.c.email_account == email_account)
   result = dbconn.execute(smt)
   all_uuids = [x['msg_uuid'] for x in result.fetchall()]
   logger.debug(f'Extracted {len(all_uuids)} UUID(s) for account {email_account}')
   return all_uuids
+
 
 def extract_msg_from_db_by_uuid(dbconn, msg_uuid):
   result = extract_msg_from_db_by_uuid_or_msgid(dbconn, 'uuid', msg_uuid)
@@ -122,14 +140,20 @@ def extract_msg_from_db_by_uuid(dbconn, msg_uuid):
   else:
     return []
 
+
 def extract_msg_from_db_by_msg_id(dbconn, msg_id):
   return extract_msg_from_db_by_uuid_or_msgid(dbconn, 'msg_id', msg_id)
 
+
 def extract_msg_from_db_by_uuid_or_msgid(dbconn, query_type, query_id):
   if query_type == 'uuid':
-    smt =  select([messagedata.c.msg_uuid,messagedata.c.msg_id,  messagedata.c.email_account, messagedata.c.raw_data]).where(messagedata.c.msg_uuid == str(query_id))
+    smt = select(
+      [messagedata.c.msg_uuid, messagedata.c.msg_id, messagedata.c.email_account,
+       messagedata.c.raw_data]).where(messagedata.c.msg_uuid == str(query_id))
   elif query_type == 'msg_id':
-    smt = select([messagedata.c.msg_uuid,messagedata.c.msg_id,  messagedata.c.email_account, messagedata.c.raw_data]).where(messagedata.c.msg_id == str(query_id))
+    smt = select(
+      [messagedata.c.msg_uuid, messagedata.c.msg_id, messagedata.c.email_account,
+       messagedata.c.raw_data]).where(messagedata.c.msg_id == str(query_id))
   else:
     raise RuntimeError(f'Unknown Query Type {query_type}')
   result = dbconn.execute(smt)
@@ -139,28 +163,16 @@ def extract_msg_from_db_by_uuid_or_msgid(dbconn, query_type, query_id):
       'msg_id': row['msg_id'],
       'msg_uuid': row['msg_uuid'],
       'email_account': row['email_account'],
-      'raw_data':row['raw_data']
+      'raw_data': row['raw_data']
     })
   return results
-
-
-
-  # stmt = sqlalchemy.select(
-  #     [storage.messagedata.c.download_id,
-  #      storage.messagedata.c.msg_ts]).where /
-  #     (storage.messagedata.c.email_account == email_label)
-
-
-  # semt = sqlalchemy.select ([storage.messagedata.c.msg_uuid, storage.messagedata.c.email_account, storage.messagedata.c.msg_subj, storage.messagedata.c.msg_to,  storage.messagedata.c.msg_from])
-  # result = dbconn.execute(semt)
-
 
 
 metadata = MetaData()
 
 messagedata = Table('messagedata', metadata,
                     Column('id', Integer, primary_key=True),
-                    Column('msg_uuid', String(50), nullable=False,unique=True),
+                    Column('msg_uuid', String(50), nullable=False, unique=True),
                     Column('email_account', String(200), nullable=False),
                     Column('msg_id', Text(), nullable=True),
                     Column('msg_ts', DateTime, nullable=True),
@@ -177,62 +189,63 @@ dbinfo = Table('dbinfo', metadata,
                Column('dbversion', Integer, nullable=False),
                Column('app_name', String(100), nullable=False),
                Column('systemversion', String(100), nullable=False),
-               Column('copyright', String(100), nullable=False),
+               Column('rabatin_copyright', String(100), nullable=False),
                Column('prod_status', String(100), nullable=False)
                )
 
 
-engine = create_engine(
-                "mysql://scott:tiger@localhost/test",
-                isolation_level="READ UNCOMMITTED"
-            )
-
-
-
 class DBEngine:
+
+  """
+  Database engine managing connections and database creation, loading from configs
+  """
 
   def is_db_a_mailrepo(self):
     inspector = inspect(self.conn(validate_as_mailrepo_db=False))
     return dbinfo.name in inspector.get_table_names()
 
   @staticmethod
-  def _load_credentials_file(cred_file:Path):
+  def _load_credentials_file(cred_file: Path):
     with open(cred_file, 'r') as f:
       return json.load(f)
 
   def _create_conn(self):
-    engine= None
+    db_engine = None
     if self.app_config.data['db_driver'] == 'sqlite':
       dbfile = self.app_config.data['db_driver_credentials']['sqlite_file_path']
       self.conn_description = f'SQLite DB {dbfile}'
-      engine = create_engine(f'sqlite:///{dbfile}')
+      db_engine = create_engine(f'sqlite:///{dbfile}')
     elif self.app_config.data['db_driver'] == 'mssql_local':
       srv = self.app_config.data['db_driver_credentials']['host']
       db = self.app_config.data['db_driver_credentials']['database_name']
-      self.conn_description ='Local MS SQl: ' + db
-      conn_string = f'{srv}/{db}?driver=SQL+Server+Native+Client+11.0?Trusted_Connection=yes'
-      engine = create_engine(f'mssql+pyodbc://{conn_string}')
+      self.conn_description = 'Local MS SQl: ' + db
+      conn_string = f'{srv}/{db}?driver=SQL+Server+Native+Client+11.0' \
+                    f'?Trusted_Connection=yes'
+      db_engine = create_engine(f'mssql+pyodbc://{conn_string}')
     elif self.app_config.data['db_driver'] == 'postgres':
       srv = self.app_config.data['db_driver_credentials']['host']
-      login_creds = DBEngine._load_credentials_file(self.app_config.data['db_driver_credentials']['credentials_file'])
+      login_creds = DBEngine._load_credentials_file(
+        self.app_config.data['db_driver_credentials']['credentials_file'])
       username = login_creds['username']
       password = login_creds['password']
       db = self.app_config.data['db_driver_credentials']['database_name']
       conn_string = f'postgres://{username}:{password}@{srv}/{db}'
-      engine = create_engine(conn_string)
+      db_engine = create_engine(conn_string)
     elif self.app_config.data['db_driver'] == 'mysql':
       srv = self.app_config.data['db_driver_credentials']['host']
-      login_creds = DBEngine._load_credentials_file(self.app_config.data['db_driver_credentials']['credentials_file'])
+      login_creds = DBEngine._load_credentials_file(
+        self.app_config.data['db_driver_credentials']['credentials_file'])
       username = login_creds['username']
       password = login_creds['password']
       db = self.app_config.data['db_driver_credentials']['database_name']
-      conn_string = f'mysql://{username}:{password}@{srv}/{db}?charset=utf8mb4&binary_prefix=true'
+      conn_string = f'mysql://{username}:{password}' \
+                    f'@{srv}/{db}?charset=utf8mb4&binary_prefix=true'
       # , pool_recycle=3600
       # , isolation_level="READ UNCOMMITTED"
-      engine = create_engine(conn_string,pool_recycle=200)
+      db_engine = create_engine(conn_string, pool_recycle=200)
     else:
       raise Exception('Unknown database driver ' + str(self.app_config.data['db_driver']))
-    return engine
+    return db_engine
 
   def close(self):
     if self._conn:
@@ -248,24 +261,24 @@ class DBEngine:
     return self.conn_description
 
   def populate_database(self):
-    ins = dbinfo.insert()
+    ins = dbinfo.insert(None)
     metadata.create_all(self.conn(validate_as_mailrepo_db=False))
     self._conn.execute(ins,
                        {'dbversion': 1,
-                        'systemversion': ar3_mailrepo_version_info.current_system_version(),
-                        'copyright': ar3_mailrepo_version_info.copyright(),
-                        'prod_status':  ar3_mailrepo_version_info.prod_status(),
-                        'app_name': ar3_mailrepo_version_info.app_name()
+                        'systemversion': versioninfo.current_system_version(),
+                        'rabatin_copyright': versioninfo.rabatin_copyright(),
+                        'prod_status': versioninfo.prod_status(),
+                        'app_name': versioninfo.app_name()
                         })
-    logger.debug(f'Populated Database as MailRepo')
+    logger.debug('Populated Database as MailRepo')
 
   def establish_conn(self):
-    unused = self.conn(validate_as_mailrepo_db=False)
+    self.conn(validate_as_mailrepo_db=False)
 
   def conn(self, validate_as_mailrepo_db=True):
     if not self._conn:
       self._conn = self._create_conn()
-      logger.debug(f'Creating Database Connection on demand')
+      logger.debug('Creating Database Connection on demand')
       if validate_as_mailrepo_db and not self.is_db_a_mailrepo():
         raise Exception('Not a valid Mail Repo Database')
     return self._conn

@@ -12,12 +12,14 @@ import datetime
 import logging
 import platform
 from pathlib import Path
-import gui
+
 import mailparser
 import sqlalchemy
-import ar3_mailrepo_version_info
-import ar3_mailrepo_lib
+
 import ar3_mailrepo_config
+import ar3_mailrepo_lib
+import ar3_mailrepo_version_info
+import gui
 import searcher
 import storage
 import util_lib
@@ -169,20 +171,24 @@ def arg_command_init_cache(data_cache_dir: Path, credential_root_dir: Path,
     f'{create_count} Folder(s) created. {len(emails) - create_count} already existed')
   arg_command_create_db(db_engine)
 
+
 def arg_command_extract_email(dbconn, msg_uuid, email_export_root: Path):
   logger.debug(f'Extracting Msg {msg_uuid} into folder {email_export_root}')
   result = storage.extract_msg_from_db_by_uuid(dbconn, msg_uuid)
   outpath = util_lib.safe_create_path(email_export_root, msg_uuid)
   logger.debug(f'Storing Msg Data for {msg_uuid} into folder {outpath}')
-  return store_message_as_extract(mailparser.parse_from_bytes(result['raw_data']), msg_uuid)
+  return store_message_as_extract(mailparser.parse_from_bytes(result['raw_data']),
+                                  msg_uuid)
 
-def arg_command_extract_pickle_obj(pickle_file_name:Path, extra_root:Path):
+
+def arg_command_extract_pickle_obj(pickle_file_name: Path, extra_root: Path):
   outpath = util_lib.safe_create_path(extra_root, pickle_file_name.name)
   logger.debug(f'Storing Msg Data for {pickle_file_name} into folder {outpath}')
   msg_object = storage.load_pickle_object_as_data(pickle_file_name)['raw_data']
   return store_message_as_extract(mailparser.parse_from_bytes(msg_object), outpath)
 
-def store_message_as_extract(msg:mailparser.MailParser, outpath:Path, msg_uuid=None):
+
+def store_message_as_extract(msg: mailparser.MailParser, outpath: Path, msg_uuid=None):
   msg.write_attachments(Path(outpath / 'attachments'))
   try:
     with open(outpath / 'headers.txt', 'w', encoding='utf-8-sig') as f:
@@ -261,7 +267,8 @@ if __name__ == '__main__':
   parser.add_argument('--list_folders', help='Lists all folders for a given email or ALL',
                       action='store', type=str)
 
-  parser.add_argument('--extract_pickle_obj', help='COnverts specific pikcle file into message extract',
+  parser.add_argument('--extract_pickle_obj',
+                      help='COnverts specific pikcle file into message extract',
                       action='store', type=str)
 
   parser.add_argument('--download', help='Downloads all emails for given email',
@@ -344,7 +351,6 @@ if __name__ == '__main__':
 
     if args.report_message_id_dupes:
       args_command_report_dupes(dbconn=email_storage_db_engine.conn())
-
 
     if args.extract_email_for_acct:
       arg_command_extract_email_for_acct(dbconn=email_storage_db_engine.conn(),
