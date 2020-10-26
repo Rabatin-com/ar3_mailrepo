@@ -1,0 +1,32 @@
+# Configuration File for AR3 MailRepo
+
+cache_dir: D:/AR3MailRepo-Data
+whoosh_index_root: D:/AR3MailRepo-Data/search_index
+email_export_root: D:/AR3MailRepo-Data/export
+credentials_root: D:/arthur.data/Sync/AR3MailRepo-Credentials
+
+# SQLLite
+#db_driver: sqlite
+#db_driver_credentials:
+#  sqlite_file_path: D:/AR3MailRepo-Data/ar3_mailrepo_storage.sqllite
+
+# Local MS SQL SERVER
+# Assumes windows authentication
+#db_driver: mssql_local
+#db_driver_credentials:
+#  host: localhost
+#  database_name: ar3_mailrepo
+
+# MySQL Installation
+# Set max_allowed_packet = 100MB
+#db_driver: mysql
+#db_driver_credentials:
+#  host: localhost
+#  credentials_file: D:/arthur.data/Sync/AR3MailRepo-Credentials/server_connections/mysql_45wsadmin_credentials.json
+#  database_name: ar3_mailrepo
+
+db_driver: postgres
+db_driver_credentials:
+  host: localhost
+  credentials_file: D:/arthur.data/Sync/AR3MailRepo-Credentials/server_connections/postgres_credentials.json
+  database_name: ar3_mailrepo
