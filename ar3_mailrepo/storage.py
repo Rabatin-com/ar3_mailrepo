@@ -20,6 +20,8 @@ from pathlib import Path
 
 import ar3_mailrepo_config
 import ar3_mailrepo_version_info as versioninfo
+import gzip
+import uuid
 
 logger = logging.getLogger('ar3_mailrepo.storage')
 
@@ -66,19 +68,26 @@ def load_pickle_object_as_data(picklefilename: Path):
       else:
         msg[k] = v
 
-    return {
+    compressed_gmail_data = None
+    if msg['ar3mr_gmail_data']:
+      compressed_gmail_data = gzip.compress(bytes(msg['ar3mr_gmail_data'], 'utf8'))
+
+
+
+    msgdata = {
       'msg_uuid': msg['ar3mr_uuid'],
       'email_account': msg['ar3mr_email_account'],
       'msg_id': msg['ar3mr_id'],
       'msg_ts': msg['ar3mr_ts'],
-      'msg_subj': msg['ar3mr_subj'],
+      'msg_subj': str(msg['ar3mr_subj']),
       'msg_from': msg['ar3mr_from'],
       'msg_to': msg['ar3mr_to'],
       'source': msg['ar3mr_source'],
       'dnload_ts': msg['ar3mr_downloadtime'],
       'raw_data': msg['ar3mr_raw'],
-      'gmail_data': msg['ar3mr_gmail_data']
+      'gmail_data': compressed_gmail_data
     }
+    return msgdata
 
 
 class DataCacheFolder:
@@ -103,7 +112,7 @@ class DataCacheFolder:
     return len(self.name.glob('*.pickle'))
 
   def store_messages_in_database(self, dbconn):
-    batchsize = 2000
+    batchsize = 1
 
     store_list = []
     message_files = [x for x in self.name.glob('*.pickle')] # pylint: disable=unnecessary-comprehension
@@ -114,7 +123,14 @@ class DataCacheFolder:
       if ((ix + 1) % batchsize == 0) or (ix + 1 == len(message_files)):
         logger.debug(f'Reached limit to insert in DB: {len(store_list)}')
         msg_ins = messagedata.insert(None)
-        dbconn.execute(msg_ins, store_list)
+        try:
+          dbconn.execute(msg_ins, store_list)
+        except Exception as e:
+          dumpfile = Path(f'exceptiion_dump_{uuid.uuid4()}.pkl')
+          with open(dumpfile,'wb') as f:
+            pickle.dump(store_list, f)
+          logger.error(f'Error in storing message to database {e}, dump in {dumpfile}')
+          raise
         store_list.clear()
         logger.debug('Insert done')
     if len([x for x in self.name.glob('*.pickle')]) != len(message_files): # pylint: disable=unnecessary-comprehension
@@ -182,7 +198,7 @@ messagedata = Table('messagedata', metadata,
                     Column('source', String(50), nullable=True),
                     Column('dnload_ts', DateTime, nullable=True),
                     Column('raw_data', LargeBinary(4294967295), nullable=True),
-                    Column('gmail_data', Text(), nullable=True)
+                    Column('gmail_data', LargeBinary(4294967295), nullable=True)
                     )
 
 dbinfo = Table('dbinfo', metadata,
@@ -238,7 +254,8 @@ class DBEngine:
       username = login_creds['username']
       password = login_creds['password']
       db = self.app_config.data['db_driver_credentials']['database_name']
-      conn_string = f'mysql://{username}:{password}' \
+      # Added +pymysql to make it work under Linux
+      conn_string = f'mysql+pymysql://{username}:{password}' \
                     f'@{srv}/{db}?charset=utf8mb4&binary_prefix=true'
       # , pool_recycle=3600
       # , isolation_level="READ UNCOMMITTED"

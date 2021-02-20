@@ -19,7 +19,7 @@ import sqlalchemy
 import ar3_mailrepo_config
 import ar3_mailrepo_lib
 import ar3_mailrepo_version_info
-import gui
+
 import searcher
 import storage
 import util_lib
@@ -62,8 +62,8 @@ def download_emails_to_cache(dbconn, emaillabel: str, cachepath_root: Path,
   svr_conn.retrieve_messages_to_cache(new_cache, since_dt, dupefilterlist)
   svr_conn.close()
   cachefolder = storage.DataCacheFolder(new_cache)
-  stored_in_db = cachefolder.store_messages_in_database(dbconn)
-  logger.debug(f'Downloaded and stored {stored_in_db} messages for {emaillabel}')
+  # stored_in_db = cachefolder.store_messages_in_database(dbconn)
+  # logger.debug(f'Downloaded and stored {stored_in_db} messages for {emaillabel}')
 
 
 def arg_command_rebuild_search(index_root: Path, dbconn):
@@ -88,11 +88,14 @@ def arg_command_list_folders_for_email(credential_root_path: Path, emaillabel: s
 
 
 def arg_command_list_folders_for_single_email(credsl_root_path: Path, emaillabel: str):
-  print(emaillabel)
-  print('-' * len(emaillabel) * 2)
-  for folder in get_folders_for_email(credsl_root_path, emaillabel):
-    print(folder)
-  print('=' * len(emaillabel) * 2)
+  try:
+    print(emaillabel)
+    print('-' * len(emaillabel) * 2)
+    for folder in get_folders_for_email(credsl_root_path, emaillabel):
+      print(folder)
+    print('=' * len(emaillabel) * 2)
+  except Exception as e:
+    print(f'Error for account {emaillabel}: {e}')
 
 
 def arg_command_download_and_store_emails(emaillabel: str,
@@ -182,7 +185,7 @@ def arg_command_extract_email(dbconn, msg_uuid, email_export_root: Path):
 
 
 def arg_command_extract_pickle_obj(pickle_file_name: Path, extra_root: Path):
-  outpath = util_lib.safe_create_path(extra_root, pickle_file_name.name)
+  outpath = util_lib.safe_create_path(extra_root, Path(pickle_file_name.name))
   logger.debug(f'Storing Msg Data for {pickle_file_name} into folder {outpath}')
   msg_object = storage.load_pickle_object_as_data(pickle_file_name)['raw_data']
   return store_message_as_extract(mailparser.parse_from_bytes(msg_object), outpath)
@@ -251,32 +254,38 @@ if __name__ == '__main__':
 
   parser = argparse.ArgumentParser(prog='AR3 Mail Repo', usage='Print -h for help')
 
+  parser.add_argument('--create_db',
+                      help='Creates a new DB. If on a server, the database must be already created, it will only be populated. With SQLite it will create the database file',
+                      action='store_true')
+  parser.add_argument('--init_cache', help='Creates directories to hold file caches. Can be safely re-run, does not change existing directories', action='store_true')
+
+  parser.add_argument('--list_emails', help='Lists all email addresseses for which there is a connection specification available for download',
+                      action='store_true')
+
+  parser.add_argument('--list_folders', help='Lists all REMOTE IMAP folders for a given email or ALL. Needs access to the remote accoung',
+                      action='store', type=str)
+
+  parser.add_argument('--download', help='Downloads all emails for given email',
+                      action='store', type=str)
+
+  parser.add_argument('--rebuild_db_data',
+                      help='Repopulates a database with the contents of a download cache.\
+                       Does NOT check for duplicates. Pass email as arg or ALL for all',
+                      action='store', type=str)
+
+
+
   parser.add_argument('--rebuild_index', help='Rebuild Search Index',
                       action='store_true')
   parser.add_argument('--search', help='Searches for a string',
                       action='store', type=str)
 
-  parser.add_argument('--gui', help='Runs GUI',
-                      action='store_true')
-  parser.add_argument('--list_emails', help='Lists all email addresseses',
-                      action='store_true')
-  parser.add_argument('--create_db',
-                      help='Creates a new DB',
-                      action='store_true')
-  parser.add_argument('--init_cache', help='Initialises data cache', action='store_true')
-  parser.add_argument('--list_folders', help='Lists all folders for a given email or ALL',
-                      action='store', type=str)
+
 
   parser.add_argument('--extract_pickle_obj',
                       help='COnverts specific pikcle file into message extract',
                       action='store', type=str)
 
-  parser.add_argument('--download', help='Downloads all emails for given email',
-                      action='store', type=str)
-  parser.add_argument('--rebuild_db_data',
-                      help='Repopulates a database with the contents of a download cache.\
-                       Does NOT check for duplicates. Pass email as arg or ALL for all',
-                      action='store', type=str)
 
   parser.add_argument('--store_message_cache_into_db',
                       help='Stores messages from a cache into the DB',
@@ -290,6 +299,7 @@ if __name__ == '__main__':
                       help='Creates a report of all dupe message IDs',
                       action='store_true')
 
+
   parser.add_argument('--extract_email_for_acct',
                       help='Extracts emails for given account',
                       action='store', type=str)
@@ -300,9 +310,6 @@ if __name__ == '__main__':
   email_storage_db_engine = storage.DBEngine(conf)
 
   try:
-
-    if args.gui:
-      gui.run_main_gui()
 
     if args.rebuild_index:
       arg_command_rebuild_search(conf.search_index_root(), email_storage_db_engine.conn())
